@@ -23,39 +23,43 @@ module.exports.intializeData = async (req, res) => {
 };
 
 module.exports.listTransactions = async (req, res) => {
-  try {
-    const { search = "", page = 1, perPage = 10 } = req.query;
+    try {
+        const { search = '', page = 1, perPage = 10 } = req.query;
 
-    const skip = (parseInt(page) - 1) * parseInt(perPage);
-    const limit = parseInt(perPage);
+        const skip = (parseInt(page) - 1) * parseInt(perPage);
+        const limit = parseInt(perPage);
 
-    const query = search
-      ? {
-          $or: [
-            { title: { $regex: search, $options: "i" } },
-            { description: { $regex: search, $options: "i" } },
-            { price: parseFloat(search) || 0 }, // Search by price if valid number
-          ],
-        }
-      : {};
+        const query = search
+            ? {
+                  sold: true,
+                  $or: [
+                      { title: { $regex: search, $options: 'i' } },
+                      { description: { $regex: search, $options: 'i' } },
+                      { price: parseFloat(search) || 0 },
+                  ],
+              }
+            : { sold: true };
 
-    const transactions = await Product.find(query).skip(skip).limit(limit);
+        console.log('Query:', query);
 
-    const total = await Product.countDocuments(query);
+        const transactions = await Product.find(query).skip(skip).limit(limit);
+        console.log('Transactions:', transactions);
 
-    res.status(200).json({
-      page: parseInt(page),
-      perPage: parseInt(perPage),
-      total,
-      transactions,
-    });
-  } catch (error) {
-    console.error("Error fetching transactions:", error.message);
-    res
-      .status(500)
-      .json({ error: "Internal Server Error", details: error.message });
-  }
+        const total = await Product.countDocuments(query);
+        console.log('Total Count:', total);
+
+        res.status(200).json({
+            page: parseInt(page),
+            perPage: parseInt(perPage),
+            total,
+            transactions,
+        });
+    } catch (error) {
+        console.error('Error fetching transactions:', error.message);
+        res.status(500).json({ error: 'Internal Server Error', details: error.message });
+    }
 };
+
 
 module.exports.getStatistics = async (req, res) => {
   try {
