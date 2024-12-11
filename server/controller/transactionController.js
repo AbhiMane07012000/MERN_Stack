@@ -23,75 +23,77 @@ module.exports.intializeData = async (req, res) => {
 };
 
 module.exports.listTransactions = async (req, res) => {
-    try {
-        const { search = '', page = 1, perPage = 10 } = req.query;
+  try {
+    const { search = '', page = 1, perPage = 10 } = req.query;
 
-        const skip = (parseInt(page) - 1) * parseInt(perPage);
-        const limit = parseInt(perPage);
+    const skip = (parseInt(page) - 1) * parseInt(perPage);
+    const limit = parseInt(perPage);
 
-        const query = search
-            ? {
-                  sold: true,
-                  $or: [
-                      { title: { $regex: search, $options: 'i' } },
-                      { description: { $regex: search, $options: 'i' } },
-                      { price: parseFloat(search) || 0 },
-                  ],
-              }
-            : { sold: true };
-
-        console.log('Query:', query);
-
-        const transactions = await Product.find(query).skip(skip).limit(limit);
-        console.log('Transactions:', transactions);
-
-        const total = await Product.countDocuments(query);
-        console.log('Total Count:', total);
-
-        res.status(200).json({
-            page: parseInt(page),
-            perPage: parseInt(perPage),
-            total,
-            transactions,
-        });
-    } catch (error) {
-        console.error('Error fetching transactions:', error.message);
-        res.status(500).json({ error: 'Internal Server Error', details: error.message });
+    let query = { sold: true }; 
+    if (search.trim()) {
+      query.$or = [
+        { title: { $regex: search, $options: 'i' } },
+        { description: { $regex: search, $options: 'i' } },
+        { price: parseFloat(search) || 0 },
+      ];
     }
+
+    const transactions = await Product.find(query).skip(skip).limit(limit);
+    
+
+    const total = await Product.countDocuments(query);
+
+
+    res.status(200).json({
+      page: parseInt(page),
+      perPage: parseInt(perPage),
+      total,
+      transactions,
+    });
+  } catch (error) {
+    console.error('Error fetching transactions:', error.message);
+    res.status(500).json({ error: 'Internal Server Error', details: error.message });
+  }
 };
+
+
 
 
 module.exports.getStatistics = async (req, res) => {
   try {
     const { month } = req.query;
 
+    console.log(month);
+    
+
     if (!month) {
-      return res.status(400).json({ error: "Month is required" });
+        return res.status(400).json({ error: 'Month is required' });
     }
 
-    const regex = new RegExp(`-${month}-`, "i");
+    
+    const startDate = new Date(new Date().getFullYear(), month - 1, 1);
+    const endDate = new Date(startDate);
+    endDate.setMonth(startDate.getMonth() + 1); 
 
-    const products = await Product.find({ dateOfSale: { $regex: regex } });
+    
+    const totalSaleAmount = await Product.aggregate([
+        { $match: { sold: true, dateOfSale: { $gte: startDate, $lt: endDate } } },
+        { $group: { _id: null, totalSaleAmount: { $sum: "$price" } } }
+    ]);
 
-    const totalSaleAmount = products.reduce(
-      (sum, product) => sum + (product.sold ? product.price : 0),
-      0
-    );
-    const totalSoldItems = products.filter((product) => product.sold).length;
-    const totalNotSoldItems = products.length - totalSoldItems;
+    const totalSoldItems = await Product.countDocuments({ sold: true, dateOfSale: { $gte: startDate, $lt: endDate } });
+
+    const totalNotSoldItems = await Product.countDocuments({ sold: false, dateOfSale: { $gte: startDate, $lt: endDate } });
 
     res.status(200).json({
-      month,
-      totalSaleAmount,
-      totalSoldItems,
-      totalNotSoldItems,
+        totalSaleAmount: totalSaleAmount[0]?.totalSaleAmount || 0,
+        totalSoldItems,
+        totalNotSoldItems
     });
-  } catch (error) {
-    console.error("Error fetching statistics:", error.message);
-    res
-      .status(500)
-      .json({ error: "Internal Server Error", details: error.message });
-  }
+} catch (error) {
+    console.error('Error fetching statistics:', error.message);
+    res.status(500).json({ error: 'Internal Server Error', details: error.message });
+}
 };
 
 module.exports.getBarChartData = async (req, res) => {
